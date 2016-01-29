@@ -156,8 +156,36 @@ func (b *Block) Nonce() uint32 {
 	var v uint32
 	return v
 }
-func (b *Block) TransaciontCount() int {
+func (b *Block) TransactionCount() int {
 	var v int
+	switch len(b.transactioncount) {
+	case 1:
+		v = int(b.transactioncount[0])
+	case 3:
+		r := bytes.NewReader(b.transactioncount[:2])
+		var i uint16
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	case 5:
+		r := bytes.NewReader(b.transactioncount[:4])
+		var i uint32
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	case 9:
+		r := bytes.NewReader(b.transactioncount[:8])
+		var i uint64
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	}
 	return v
 }
 
@@ -283,49 +311,20 @@ func (w *BlockParser) Decode() (*Block, error) {
 			}
 		}
 	}
-	switch len(block.transactioncount) {
-	case 1:
-		log.Printf("Transaction Count: %v\n", int(block.transactioncount[0]))
-	case 3:
-		r := bytes.NewReader(block.transactioncount[:2])
-		var i uint16
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
+	log.Printf("TransactionCount: %v\n", block.TransactionCount())
+
+	for i := 0; i < block.TransactionCount(); i++ {
+		tp := NewTransParser(w)
+		if t, err := tp.Decode(); err == nil {
+			log.Println("Adding Transaction")
+			block.Transactions = append(block.Transactions, *t)
+		} else {
+			log.Printf("Transaction Parse Error: %v\n", err)
 		}
-		log.Printf("Transaction Count: %v\n", int(i))
-	case 5:
-		r := bytes.NewReader(block.transactioncount[:4])
-		var i uint32
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		log.Printf("Transaction Count: %v\n", int(i))
-	case 9:
-		r := bytes.NewReader(block.transactioncount[:8])
-		var i uint64
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		log.Printf("Transaction Count: %v\n", int(i))
 	}
-	//log.Printf("TransactionCount: %v\n", block.TransactionCount)
-
-	//for i := 0; i < block.TransactionCount; i++ {
-	//tp := NewTransParser(w)
-	//if t, err := tp.Decode(); err == nil {
-	//log.Println("Adding Transaction")
-	//block.Transactions = append(block.Transactions, *t)
-	//} else {
-	//log.Printf("Transaction Parse Error: %v\n", err)
-	//}
-	//}
-	//if err := binary.Read(w, binary.LittleEndian, &block.Transactions); err != nil {
-	//return &block, err
-	//}
-
+	if err := binary.Read(w, binary.LittleEndian, &block.Transactions); err != nil {
+		return &block, err
+	}
 	//log.Printf("Block: %#v\n", block)
 
 	return &block, nil
