@@ -190,30 +190,59 @@ func (b *Block) TransactionCount() int {
 }
 
 type Transaction struct {
-	VersionNumber  uint32
-	InputCountRaw  []uint8
-	InputCount     int
-	Inputs         []TransInput
-	OutputCountRaw []uint8
-	OutputCount    int
-	Outputs        []TransOutput
-	LockTime       uint32
+	versionnumber [4]uint8
+	inputcount    []uint8
+	Inputs        []TransInput
+	outputcount   []uint8
+	Outputs       []TransOutput
+	loctime       [4]uint8
+}
+
+func (t *Transaction) InputCount() int {
+	var v int
+	switch len(t.inputcount) {
+	case 1:
+		v = int(t.inputcount[0])
+	case 3:
+		r := bytes.NewReader(t.inputcount[:2])
+		var i uint16
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	case 5:
+		r := bytes.NewReader(t.inputcount[:4])
+		var i uint32
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	case 9:
+		r := bytes.NewReader(t.inputcount[:8])
+		var i uint64
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	}
+	return v
 }
 
 type TransInput struct {
-	Hash            []uint8
-	Index           uint32
-	ScriptLengthRaw []uint8
-	ScriptLength    int
-	Script          []uint8
-	SequenceNumber  uint32
+	hash           [32]uint8
+	index          [4]uint8
+	scriptlength   []uint8
+	script         []uint8
+	sequencenumber [4]uint8
 }
 
 type TransOutput struct {
-	Value           uint64
-	ScriptLengthRaw []uint8
-	ScriptLength    int
-	Script          []uint8
+	value        [8]uint64
+	scriptlength []uint8
+	script       []uint8
 }
 
 type BlockParser struct {
@@ -316,14 +345,10 @@ func (w *BlockParser) Decode() (*Block, error) {
 	for i := 0; i < block.TransactionCount(); i++ {
 		tp := NewTransParser(w)
 		if t, err := tp.Decode(); err == nil {
-			log.Println("Adding Transaction")
-			block.Transactions = append(block.Transactions, *t)
-		} else {
+			block.Transactions = append(block.Transactions, t)
+		} else if err != io.EOF {
 			log.Printf("Transaction Parse Error: %v\n", err)
 		}
-	}
-	if err := binary.Read(w, binary.LittleEndian, &block.Transactions); err != nil {
-		return &block, err
 	}
 	//log.Printf("Block: %#v\n", block)
 
@@ -340,14 +365,39 @@ func NewTransParser(r io.Reader) *TransParser {
 	}
 }
 
-func (w *TransParser) Decode() (*Transaction, error) {
-	block := Transaction{}
+func (w *TransParser) Decode() (Transaction, error) {
+	trans := Transaction{}
+	log.Println("Decoding Transaction")
 
-	if err := binary.Read(w, binary.LittleEndian, &block.InputCount); err != nil {
-		return &block, err
+	if err := binary.Read(w, binary.LittleEndian, &trans.versionnumber); err != nil {
+		log.Printf("Transaction Version Error: %v\n", err)
+		return trans, err
 	}
+	log.Printf("\tTransaction VersionNumber: %v\n", trans.versionnumber)
 
-	log.Printf("Block: %#v\n", block)
+	if b, err := w.ReadByte(); err != nil {
+		log.Printf("Transaction Count Read Error: %v\n", err)
+		return trans, err
+	} else {
+		trans.inputcount = append(trans.inputcount, b)
+		c := -1
+		if uint8(b) == 253 {
+			c = 2
+		} else if uint8(b) == 254 {
+			c = 4
+		} else if uint8(b) == 255 {
+			c = 8
+		}
+		for i := 0; i < c; i++ {
+			if b, err := w.ReadByte(); err == nil {
+				trans.inputcount = append(trans.inputcount, b)
+			} else {
+				log.Printf("Transaction Input Count Error: %v\n", err)
+				break
+			}
+		}
+	}
+	log.Printf("InputCount: %v\n", trans.InputCount())
 
-	return &block, nil
+	return trans, nil
 }
