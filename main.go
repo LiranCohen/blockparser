@@ -81,9 +81,9 @@ func main() {
 				block = append(block, b)
 			}
 			blocks++
-			//if blocks < 100000 {
-			//continue
-			//}
+			if blocks < 100000 {
+				continue
+			}
 			//Send the retrieved block to the parser
 			wg.Add(1)
 			go ParseBlock(blocks, block)
@@ -364,7 +364,7 @@ type TransInput struct {
 }
 
 type TransOutput struct {
-	value        [8]uint64
+	value        uint64
 	scriptlength []uint8
 	script       []uint8
 }
@@ -468,8 +468,7 @@ func (w *BlockParser) Decode() (*Block, error) {
 	log.Printf("TransactionCount: %v\n", VarInt(block.transactioncount))
 
 	for i := 0; i < VarInt(block.transactioncount); i++ {
-		tp := NewTransParser(w)
-		if t, err := tp.Decode(); err == nil {
+		if t, err := w.DecodeTrans(); err == nil {
 			block.Transactions = append(block.Transactions, t)
 		} else if err != io.EOF {
 			log.Printf("Transaction Parse Error: %v\n", err)
@@ -480,20 +479,9 @@ func (w *BlockParser) Decode() (*Block, error) {
 	return &block, nil
 }
 
-type TransParser struct {
-	*bufio.Reader
-}
-
-func NewTransParser(r io.Reader) *TransParser {
-	return &TransParser{
-		Reader: bufio.NewReader(r),
-	}
-}
-
-func (w *TransParser) Decode() (Transaction, error) {
+func (w *BlockParser) DecodeTrans() (Transaction, error) {
 	trans := Transaction{}
 	log.Println("Decoding Transaction")
-
 	if err := binary.Read(w, binary.LittleEndian, &trans.versionnumber); err != nil {
 		log.Printf("Transaction Version Error: %v\n", err)
 		return trans, err
@@ -522,10 +510,9 @@ func (w *TransParser) Decode() (Transaction, error) {
 			}
 		}
 	}
-	log.Printf("InputCount: %v\n", trans.inputcount)
-	for i := 0; i < trans.InputCount(); i++ {
-		ip := NewInputParser(w)
-		if input, err := ip.Decode(); err == nil {
+	log.Printf("\tInputCount: %v\n", VarInt(trans.inputcount))
+	for i := 0; i < VarInt(trans.inputcount); i++ {
+		if input, err := w.DecodeInput(); err == nil {
 			trans.Inputs = append(trans.Inputs, input)
 		} else if err != io.EOF {
 			log.Printf("Transaction Parse Error: %v\n", err)
@@ -554,30 +541,23 @@ func (w *TransParser) Decode() (Transaction, error) {
 			}
 		}
 	}
-	log.Printf("Output Count: %v\n", trans.OutputCount())
-	for i := 0; i < trans.OutputCount(); i++ {
-		op := NewOutputParser(w)
-		if output, err := op.Decode(); err == nil {
+	log.Printf("Output Count: %v\n", VarInt(trans.outputcount))
+	for i := 0; i < VarInt(trans.outputcount); i++ {
+		if output, err := w.DecodeOutput(); err == nil {
 			trans.Outputs = append(trans.Outputs, output)
 		} else if err != io.EOF {
 			log.Printf("Transaction Parse Error: %v\n", err)
 		}
 	}
+	if err := binary.Read(w, binary.LittleEndian, &trans.loctime); err != nil {
+		log.Printf("Transaction Lock Time Error: %v\n", err)
+	}
+	log.Printf("Trsansaction Lock Time: %#v\n", trans.loctime)
 
 	return trans, nil
 }
 
-type InputParser struct {
-	*bufio.Reader
-}
-
-func NewInputParser(r io.Reader) *InputParser {
-	return &InputParser{
-		Reader: bufio.NewReader(r),
-	}
-}
-
-func (w *InputParser) Decode() (TransInput, error) {
+func (w *BlockParser) DecodeInput() (TransInput, error) {
 	input := TransInput{}
 	if err := binary.Read(w, binary.LittleEndian, &input.hash); err != nil {
 		log.Printf("Input Hash Error: %v\n", err)
@@ -630,20 +610,10 @@ func (w *InputParser) Decode() (TransInput, error) {
 	return input, nil
 }
 
-type OutputParser struct {
-	*bufio.Reader
-}
-
-func NewOutputParser(r io.Reader) *OutputParser {
-	return &OutputParser{
-		Reader: bufio.NewReader(r),
-	}
-}
-
-func (w *OutputParser) Decode() (TransOutput, error) {
+func (w *BlockParser) DecodeOutput() (TransOutput, error) {
 	out := TransOutput{}
 	if err := binary.Read(w, binary.LittleEndian, &out.value); err != nil {
-		log.Printf("Input Hash Error: %v\n", err)
+		log.Printf("Output Value Error: %v\n", err)
 		return out, err
 	}
 	log.Printf("\tOutput Value: %v\n", out.value)
@@ -670,9 +640,9 @@ func (w *OutputParser) Decode() (TransOutput, error) {
 			}
 		}
 	}
-	log.Printf("Script Length: %v\n", int(ParseLEUint(out.scriptlength)))
+	log.Printf("Script Length: %v\n", VarInt(out.scriptlength))
 
-	for i := 0; i < int(ParseLEUint(out.scriptlength)); i++ {
+	for i := 0; i < VarInt(out.scriptlength); i++ {
 		if b, err := w.ReadByte(); err == nil {
 			out.script = append(out.script, b)
 		}
