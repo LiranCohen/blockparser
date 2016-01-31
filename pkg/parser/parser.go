@@ -3,6 +3,7 @@ package parser
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -59,6 +60,37 @@ type Block struct {
 	Transactions     []Transaction
 }
 
+func (b *Block) Hash() []byte {
+	var d []uint8
+	//d = append(d, b.magicid[:]...)
+	//d = append(d, b.blocklength[:]...)
+	d = append(d, b.versionnumber[:]...)
+	d = append(d, b.previoushash[:]...)
+	d = append(d, b.merkleroot[:]...)
+	d = append(d, b.timestamp[:]...)
+	d = append(d, b.targetdifficulty[:]...)
+	d = append(d, b.nonce[:]...)
+	h := sha256.New()
+	h.Reset()
+	if _, err := h.Write(d); err != nil {
+		return []byte{}
+	}
+	tmp := h.Sum(nil)
+	h.Reset()
+	if _, err := h.Write(tmp); err != nil {
+		return []byte{}
+	}
+	return h.Sum(nil)
+}
+func (b *Block) HashString() string {
+	var temp []byte
+	hash := b.Hash()
+	//Not sure how else to converte little endian to string.
+	for i := 0; i < len(hash); i++ {
+		temp = append([]byte{hash[i]}, temp...)
+	}
+	return fmt.Sprintf("%x", temp[:])
+}
 func (b *Block) MagicID() uint32 {
 	var v uint32
 	reader := bytes.NewReader(b.magicid[:])
@@ -276,42 +308,41 @@ func (w *BlockParser) Decode() (*Block, error) {
 	if err := binary.Read(w, binary.LittleEndian, &block.magicid); err != nil {
 		return &block, err
 	}
-	log.Printf("Magic ID: %x\n", block.MagicID())
 
 	if err := binary.Read(w, binary.LittleEndian, &block.blocklength); err != nil {
 		return &block, err
 	}
-	log.Printf("Block Length: %v\n", block.BlockLength())
-
 	if err := binary.Read(w, binary.LittleEndian, &block.versionnumber); err != nil {
 		return &block, err
 	}
-	log.Printf("Version Number: %v\n", block.VersionNumber())
-
 	if err := binary.Read(w, binary.LittleEndian, &block.previoushash); err != nil {
 		return &block, err
 	}
-	log.Printf("Previous Hash: %v\n", block.PreviousHashString())
 
 	if err := binary.Read(w, binary.LittleEndian, &block.merkleroot); err != nil {
 		return &block, err
 	}
 
-	log.Printf("Merkle Root: %v\n", block.MerkleRootString())
-
 	if err := binary.Read(w, binary.LittleEndian, &block.timestamp); err != nil {
 		return &block, err
 	}
-	log.Printf("TimeStamp: %v\n", block.TimeStampFormatted())
 
 	if err := binary.Read(w, binary.LittleEndian, &block.targetdifficulty); err != nil {
 		return &block, err
 	}
-	log.Printf("Target Difficulty: %v\n", block.TargetDifficulty())
 
 	if err := binary.Read(w, binary.LittleEndian, &block.nonce); err != nil {
 		return &block, err
 	}
+
+	log.Printf("Magic ID: %x\n", block.MagicID())
+	log.Printf("Hash: %v\n", block.HashString())
+	log.Printf("Block Length: %v\n", block.BlockLength())
+	log.Printf("Version Number: %v\n", block.VersionNumber())
+	log.Printf("Previous Hash: %v\n", block.PreviousHashString())
+	log.Printf("Merkle Root: %v\n", block.MerkleRootString())
+	log.Printf("TimeStamp: %v\n", block.TimeStampFormatted())
+	log.Printf("Target Difficulty: %v\n", block.TargetDifficulty())
 	log.Printf("Nonce: %v\n", block.Nonce())
 
 	if b, err := w.ReadByte(); err != nil {
