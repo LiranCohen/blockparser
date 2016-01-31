@@ -193,6 +193,39 @@ type Transaction struct {
 	locktime      [4]uint8
 }
 
+func (t *Transaction) Hash() []uint8 {
+	var d []uint8
+	d = append(d, t.versionnumber[:]...)
+	d = append(d, t.inputcount[:]...)
+	for _, ti := range t.Inputs {
+		d = append(d, ti.hash[:]...)
+		d = append(d, ti.index[:]...)
+		d = append(d, ti.scriptlength[:]...)
+		d = append(d, ti.script[:]...)
+		d = append(d, ti.sequencenumber[:]...)
+	}
+	d = append(d, t.outputcount[:]...)
+	for _, to := range t.Outputs {
+		v := make([]byte, 8)
+		binary.LittleEndian.PutUint64(v, to.value)
+		d = append(d, v[:]...)
+		d = append(d, to.scriptlength[:]...)
+		d = append(d, to.script[:]...)
+	}
+	d = append(d, t.locktime[:]...)
+	h := sha256.New()
+	h.Reset()
+	if _, err := h.Write(d); err != nil {
+		return []byte{}
+	}
+	tmp := h.Sum(nil)
+	h.Reset()
+	if _, err := h.Write(tmp); err != nil {
+		return []byte{}
+	}
+	return h.Sum(nil)
+}
+
 func (t *Transaction) VersionNumber() uint32 {
 	var v uint32
 	reader := bytes.NewReader(t.versionnumber[:])
@@ -225,6 +258,16 @@ func (t *Transaction) LockTimeFormatted() time.Time {
 	} else {
 		return time.Time{}
 	}
+}
+
+func (t *Transaction) HashString() string {
+	var temp []byte
+	//Not sure how else to converte little endian to string.
+	th := t.Hash()
+	for i := 0; i < len(t.Hash()); i++ {
+		temp = append([]byte{th[i]}, temp...)
+	}
+	return fmt.Sprintf("%x", temp[:])
 }
 
 type TransInput struct {
@@ -387,7 +430,7 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 		log.Printf("Transaction Version Error: %v\n", err)
 		return trans, err
 	}
-	log.Printf("\tTransaction VersionNumber: %v\n", trans.VersionNumber())
+	log.Printf("\tTransaction Version Number: %v\n", trans.VersionNumber())
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Input Transaction Count Read Error: %v\n", err)
@@ -456,7 +499,7 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 		log.Printf("Transaction Lock Time Error: %v\n", err)
 	}
 	log.Printf("\tTrsansaction Lock Time: %v\n", trans.LockTimeFormatted())
-
+	log.Printf("\tTransaction Hash: %v\n", trans.HashString())
 	return trans, nil
 }
 
