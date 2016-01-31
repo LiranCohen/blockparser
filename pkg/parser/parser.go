@@ -110,6 +110,7 @@ func (b *Block) Nonce() uint32 {
 	}
 	return v
 }
+
 func VarInt(input []byte) int {
 	var v int
 	switch len(input) {
@@ -143,38 +144,6 @@ func VarInt(input []byte) int {
 	return v
 
 }
-func (b *Block) TransactionCount() int {
-	var v int
-	switch len(b.transactioncount) {
-	case 1:
-		v = int(b.transactioncount[0])
-	case 3:
-		r := bytes.NewReader(b.transactioncount[:2])
-		var i uint16
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 5:
-		r := bytes.NewReader(b.transactioncount[:4])
-		var i uint32
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 9:
-		r := bytes.NewReader(b.transactioncount[:8])
-		var i uint64
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	}
-	return v
-}
 
 type Transaction struct {
 	versionnumber [4]uint8
@@ -183,72 +152,6 @@ type Transaction struct {
 	outputcount   []uint8
 	Outputs       []TransOutput
 	loctime       [4]uint8
-}
-
-func (t *Transaction) InputCount() int {
-	var v int
-	switch len(t.inputcount) {
-	case 1:
-		v = int(t.inputcount[0])
-	case 3:
-		r := bytes.NewReader(t.inputcount[:2])
-		var i uint16
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 5:
-		r := bytes.NewReader(t.inputcount[:4])
-		var i uint32
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 9:
-		r := bytes.NewReader(t.inputcount[:8])
-		var i uint64
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	}
-	return v
-}
-
-func (t *Transaction) OutputCount() int {
-	var v int
-	switch len(t.outputcount) {
-	case 1:
-		v = int(t.outputcount[0])
-	case 3:
-		r := bytes.NewReader(t.outputcount[:2])
-		var i uint16
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 5:
-		r := bytes.NewReader(t.outputcount[:4])
-		var i uint32
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 9:
-		r := bytes.NewReader(t.outputcount[:8])
-		var i uint64
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	}
-	return v
 }
 
 type TransInput struct {
