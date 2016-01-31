@@ -10,6 +10,41 @@ import (
 	"time"
 )
 
+//Helper Function To Convert VariableInt to Int
+func VarInt(input []byte) int {
+	var v int
+	switch len(input) {
+	case 1:
+		v = int(input[0])
+	case 3:
+		r := bytes.NewReader(input[:2])
+		var i uint16
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	case 5:
+		r := bytes.NewReader(input[:4])
+		var i uint32
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	case 9:
+		r := bytes.NewReader(input[:8])
+		var i uint64
+		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
+			log.Printf("Transaction Count Error: %v\n", err)
+			break
+		}
+		v = int(i)
+	}
+	return v
+
+}
+
 //BlockData Structure
 type Block struct {
 	magicid          [4]byte
@@ -87,9 +122,11 @@ func (b *Block) TimeStamp() uint32 {
 }
 
 func (b *Block) TimeStampFormatted() time.Time {
-	var t time.Time
-	t = time.Unix(1231469665, 0)
-	return t
+	if b.TimeStamp() > 0 {
+		return time.Unix(int64(b.TimeStamp()), 0)
+	} else {
+		return time.Time{}
+	}
 }
 
 func (b *Block) TargetDifficulty() uint32 {
@@ -115,47 +152,47 @@ func (b *Block) TransactionCount() int {
 	return VarInt(b.transactioncount)
 }
 
-func VarInt(input []byte) int {
-	var v int
-	switch len(input) {
-	case 1:
-		v = int(input[0])
-	case 3:
-		r := bytes.NewReader(input[:2])
-		var i uint16
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 5:
-		r := bytes.NewReader(input[:4])
-		var i uint32
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	case 9:
-		r := bytes.NewReader(input[:8])
-		var i uint64
-		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
-			break
-		}
-		v = int(i)
-	}
-	return v
-
-}
-
 type Transaction struct {
 	versionnumber [4]uint8
 	inputcount    []uint8
 	Inputs        []TransInput
 	outputcount   []uint8
 	Outputs       []TransOutput
-	loctime       [4]uint8
+	locktime      [4]uint8
+}
+
+func (t *Transaction) VersionNumber() uint32 {
+	var v uint32
+	reader := bytes.NewReader(t.versionnumber[:])
+	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
+		log.Printf("VersionNumber Error: %v", err)
+	}
+	return v
+}
+
+func (t *Transaction) InputCount() int {
+	return VarInt(t.inputcount)
+}
+
+func (t *Transaction) OutputCount() int {
+	return VarInt(t.outputcount)
+}
+
+func (t *Transaction) LockTime() uint32 {
+	var v uint32
+	reader := bytes.NewReader(t.locktime[:])
+	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
+		log.Printf("TimeStamp Error: %v", err)
+	}
+	return v
+}
+
+func (t *Transaction) LockTimeFormatted() time.Time {
+	if t.LockTime() > 0 {
+		return time.Unix(int64(t.LockTime()), 0)
+	} else {
+		return time.Time{}
+	}
 }
 
 type TransInput struct {
@@ -164,6 +201,33 @@ type TransInput struct {
 	scriptlength   []uint8
 	script         []uint8
 	sequencenumber [4]uint8
+}
+
+func (ti *TransInput) Hash() [32]uint8 {
+	//Still in Little Endian
+	return b.previoushash
+}
+
+func (ti *TransInput) HashString() string {
+	var temp []byte
+	//Not sure how else to converte little endian to string.
+	for i := 0; i < cap(b.previoushash); i++ {
+		temp = append([]byte{b.previoushash[i]}, temp...)
+	}
+	return fmt.Sprintf("%x", temp[:])
+}
+
+func (ti *TransInput) ScriptLength() int {
+	return VarInt(ti.scriptlength)
+}
+
+func (ti *TransInput) SequenceNumber() uint32 {
+	var v uint32
+	reader := bytes.NewReader(ti.sequencenumber[:])
+	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
+		log.Printf("Sequence Number Error: %v", err)
+	}
+	return v
 }
 
 type TransOutput struct {
@@ -330,10 +394,10 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 			log.Printf("Transaction Parse Error: %v\n", err)
 		}
 	}
-	if err := binary.Read(w, binary.LittleEndian, &trans.loctime); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &trans.locktime); err != nil {
 		log.Printf("Transaction Lock Time Error: %v\n", err)
 	}
-	log.Printf("Trsansaction Lock Time: %#v\n", trans.loctime)
+	log.Printf("Trsansaction Lock Time: %v\n", trans.LockTimeFormatted())
 
 	return trans, nil
 }
