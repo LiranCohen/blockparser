@@ -205,20 +205,32 @@ type TransInput struct {
 
 func (ti *TransInput) Hash() [32]uint8 {
 	//Still in Little Endian
-	return b.previoushash
+	return ti.hash
 }
 
 func (ti *TransInput) HashString() string {
 	var temp []byte
 	//Not sure how else to converte little endian to string.
-	for i := 0; i < cap(b.previoushash); i++ {
-		temp = append([]byte{b.previoushash[i]}, temp...)
+	for i := 0; i < cap(ti.hash); i++ {
+		temp = append([]byte{ti.hash[i]}, temp...)
 	}
 	return fmt.Sprintf("%x", temp[:])
+}
+func (ti *TransInput) Index() uint32 {
+	var v uint32
+	reader := bytes.NewReader(ti.index[:])
+	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
+		log.Printf("Index Error: %v", err)
+	}
+	return v
 }
 
 func (ti *TransInput) ScriptLength() int {
 	return VarInt(ti.scriptlength)
+}
+
+func (ti *TransInput) Script() []uint8 {
+	return ti.script
 }
 
 func (ti *TransInput) SequenceNumber() uint32 {
@@ -234,6 +246,18 @@ type TransOutput struct {
 	value        uint64
 	scriptlength []uint8
 	script       []uint8
+}
+
+func (to *TransOutput) Value() uint64 {
+	return to.value
+}
+
+func (to *TransOutput) ScriptLength() int {
+	return VarInt(to.scriptlength)
+}
+
+func (to *TransOutput) Script() []uint8 {
+	return to.script
 }
 
 type BlockParser struct {
@@ -327,18 +351,19 @@ func (w *BlockParser) Decode() (*Block, error) {
 func (w *BlockParser) DecodeTrans() (Transaction, error) {
 	trans := Transaction{}
 	log.Println("Decoding Transaction")
+
 	if err := binary.Read(w, binary.LittleEndian, &trans.versionnumber); err != nil {
 		log.Printf("Transaction Version Error: %v\n", err)
 		return trans, err
 	}
-	log.Printf("\tTransaction VersionNumber: %v\n", trans.versionnumber)
+	log.Printf("\tTransaction VersionNumber: %v\n", trans.VersionNumber())
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Input Transaction Count Read Error: %v\n", err)
 		return trans, err
 	} else {
+		var c int
 		trans.inputcount = append(trans.inputcount, b)
-		c := -1
 		if uint8(b) == 253 {
 			c = 2
 		} else if uint8(b) == 254 {
@@ -346,17 +371,17 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 		} else if uint8(b) == 255 {
 			c = 8
 		}
-		for i := 0; i < c; i++ {
-			if b, err := w.ReadByte(); err == nil {
-				trans.inputcount = append(trans.inputcount, b)
-			} else {
+		if c > 1 {
+			d := make([]uint8, c)
+			if err := binary.Read(w, binary.LittleEndian, &d); err != nil {
 				log.Printf("Transaction Input Count Error: %v\n", err)
-				break
+			} else {
+				trans.inputcount = append(trans.inputcount, b)
 			}
 		}
 	}
-	log.Printf("\tInputCount: %v\n", VarInt(trans.inputcount))
-	for i := 0; i < VarInt(trans.inputcount); i++ {
+	log.Printf("\tInputCount: %v\n", trans.InputCount())
+	for i := 0; i < trans.InputCount(); i++ {
 		if input, err := w.DecodeInput(); err == nil {
 			trans.Inputs = append(trans.Inputs, input)
 		} else if err != io.EOF {
@@ -386,18 +411,20 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 			}
 		}
 	}
-	log.Printf("Output Count: %v\n", VarInt(trans.outputcount))
-	for i := 0; i < VarInt(trans.outputcount); i++ {
+	log.Printf("\tOutput Count: %v\n", trans.OutputCount())
+
+	for i := 0; i < trans.OutputCount(); i++ {
 		if output, err := w.DecodeOutput(); err == nil {
 			trans.Outputs = append(trans.Outputs, output)
 		} else if err != io.EOF {
 			log.Printf("Transaction Parse Error: %v\n", err)
 		}
 	}
+
 	if err := binary.Read(w, binary.LittleEndian, &trans.locktime); err != nil {
 		log.Printf("Transaction Lock Time Error: %v\n", err)
 	}
-	log.Printf("Trsansaction Lock Time: %v\n", trans.LockTimeFormatted())
+	log.Printf("\tTrsansaction Lock Time: %v\n", trans.LockTimeFormatted())
 
 	return trans, nil
 }
@@ -408,12 +435,12 @@ func (w *BlockParser) DecodeInput() (TransInput, error) {
 		log.Printf("Input Hash Error: %v\n", err)
 		return input, err
 	}
-	log.Printf("\tInput Hash: %v\n", input.hash)
+	log.Printf("\tInput Hash: %v\n", input.HashString())
 	if err := binary.Read(w, binary.LittleEndian, &input.index); err != nil {
 		log.Printf("Input Index Error: %v\n", err)
 		return input, err
 	}
-	log.Printf("\tInput Index: %v\n", input.index)
+	log.Printf("\tInput Index: %v\n", input.Index())
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Script Length Read Error: %v\n", err)
@@ -436,21 +463,21 @@ func (w *BlockParser) DecodeInput() (TransInput, error) {
 				input.scriptlength = append(input.scriptlength, d...)
 			}
 		}
-		log.Printf("Script Length: %v\n", VarInt(input.scriptlength))
+		log.Printf("\tScript Length: %v\n", input.ScriptLength())
 
-		for i := 0; i < VarInt(input.scriptlength); i++ {
+		for i := 0; i < input.ScriptLength(); i++ {
 			if b, err := w.ReadByte(); err == nil {
 				input.script = append(input.script, b)
 			}
 		}
-		log.Printf("Script: %v\n", input.script)
+		log.Printf("\tScript: %v\n", input.Script())
 	}
 
 	if err := binary.Read(w, binary.LittleEndian, &input.sequencenumber); err != nil {
 		log.Printf("Input Index Error: %v\n", err)
 		return input, err
 	}
-	log.Printf("\tSequence Number: %v\n", input.sequencenumber)
+	log.Printf("\tSequence Number: %v\n", input.SequenceNumber())
 
 	return input, nil
 }
@@ -485,14 +512,14 @@ func (w *BlockParser) DecodeOutput() (TransOutput, error) {
 			}
 		}
 	}
-	log.Printf("Script Length: %v\n", VarInt(out.scriptlength))
+	log.Printf("\tScript Length: %v\n", VarInt(out.scriptlength))
 
 	for i := 0; i < VarInt(out.scriptlength); i++ {
 		if b, err := w.ReadByte(); err == nil {
 			out.script = append(out.script, b)
 		}
 	}
-	log.Printf("Script: %v\n", out.script)
+	log.Printf("\tScript: %v\n", out.script)
 
 	return out, nil
 }
