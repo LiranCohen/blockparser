@@ -10,7 +10,7 @@ import (
 	//"strconv"
 	"sync"
 
-	"github.com/lirancohen/btc/pkg/parser"
+	"github.com/lirancohen/blockparser/pkg/parser"
 )
 
 var wg sync.WaitGroup
