@@ -249,7 +249,7 @@ func (s *Stream) ParseAll() error {
 
 //BlockData Structure
 type Block struct {
-	MagicId          [4]byte
+	MagicID          [4]byte
 	BlockLength      [4]uint8
 	VersionNumber    [4]uint8
 	PreviousHash     [32]uint8
@@ -292,15 +292,15 @@ func (b *Block) HashString() string {
 	}
 	return fmt.Sprintf("%x", temp[:])
 }
-func (b *Block) MagicID() uint32 {
+func (b *Block) MagicIDVal() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.MagicId[:])
+	reader := bytes.NewReader(b.MagicID[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("MagicID Error: %v", err)
 	}
 	return v
 }
-func (b *Block) BlockLength() uint32 {
+func (b *Block) BlockLengthVal() uint32 {
 	var v uint32
 	reader := bytes.NewReader(b.BlockLength[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
@@ -308,7 +308,7 @@ func (b *Block) BlockLength() uint32 {
 	}
 	return v
 }
-func (b *Block) VersionNumber() uint32 {
+func (b *Block) VersionNumberVal() uint32 {
 	var v uint32
 	reader := bytes.NewReader(b.VersionNumber[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
@@ -317,37 +317,27 @@ func (b *Block) VersionNumber() uint32 {
 	return v
 }
 
-func (b *Block) PreviousHash() [32]uint8 {
-	//Still in Little Endian
-	return b.previoushash
-}
-
 func (b *Block) PreviousHashString() string {
 	var temp []byte
 	//Not sure how else to converte little endian to string.
-	for i := 0; i < cap(b.previoushash); i++ {
-		temp = append([]byte{b.previoushash[i]}, temp...)
+	for i := 0; i < cap(b.PreviousHash); i++ {
+		temp = append([]byte{b.PreviousHash[i]}, temp...)
 	}
 	return fmt.Sprintf("%x", temp[:])
-}
-
-func (b *Block) MerkleRoot() [32]uint8 {
-	//Still in Little Endian
-	return b.merkleroot
 }
 
 func (b *Block) MerkleRootString() string {
 	var temp []byte
 	//Not sure how else to converte little endian to string.
-	for i := 0; i < cap(b.merkleroot); i++ {
-		temp = append([]byte{b.merkleroot[i]}, temp...)
+	for i := 0; i < cap(b.MerkleRoot); i++ {
+		temp = append([]byte{b.MerkleRoot[i]}, temp...)
 	}
 	return fmt.Sprintf("%x", temp[:])
 }
 
-func (b *Block) TimeStamp() uint32 {
+func (b *Block) TimeStampVal() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.timestamp[:])
+	reader := bytes.NewReader(b.TimeStamp[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("TimeStamp Error: %v", err)
 	}
@@ -355,16 +345,16 @@ func (b *Block) TimeStamp() uint32 {
 }
 
 func (b *Block) TimeStampFormatted() time.Time {
-	if b.TimeStamp() > 0 {
-		return time.Unix(int64(b.TimeStamp()), 0)
+	if b.TimeStampVal() > 0 {
+		return time.Unix(int64(b.TimeStampVal()), 0)
 	} else {
 		return time.Time{}
 	}
 }
 
-func (b *Block) TargetDifficulty() uint32 {
+func (b *Block) TargetDifficultyVal() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.targetdifficulty[:])
+	reader := bytes.NewReader(b.TargetDifficulty[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("TargetDifficulty Error: %v", err)
 	}
@@ -372,17 +362,17 @@ func (b *Block) TargetDifficulty() uint32 {
 
 }
 
-func (b *Block) Nonce() uint32 {
+func (b *Block) NonceVal() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.nonce[:])
+	reader := bytes.NewReader(b.Nonce[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("Nonce Error: %v", err)
 	}
 	return v
 }
 
-func (b *Block) TransactionCount() int {
-	return VarInt(b.transactioncount)
+func (b *Block) TransactionCountVal() int {
+	return VarInt(b.TransactionCount)
 }
 
 type Transaction struct {
@@ -549,51 +539,51 @@ func NewBlockParser(r io.Reader) *BlockParser {
 func (w *BlockParser) Decode() (*Block, error) {
 	block := Block{}
 
-	if err := binary.Read(w, binary.LittleEndian, &block.magicid); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.MagicID); err != nil {
 		return &block, err
 	}
 
-	if err := binary.Read(w, binary.LittleEndian, &block.blocklength); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.BlockLength); err != nil {
 		return &block, err
 	}
-	if err := binary.Read(w, binary.LittleEndian, &block.versionnumber); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.VersionNumber); err != nil {
 		return &block, err
 	}
-	if err := binary.Read(w, binary.LittleEndian, &block.previoushash); err != nil {
-		return &block, err
-	}
-
-	if err := binary.Read(w, binary.LittleEndian, &block.merkleroot); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.PreviousHash); err != nil {
 		return &block, err
 	}
 
-	if err := binary.Read(w, binary.LittleEndian, &block.timestamp); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.MerkleRoot); err != nil {
 		return &block, err
 	}
 
-	if err := binary.Read(w, binary.LittleEndian, &block.targetdifficulty); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.TimeStamp); err != nil {
 		return &block, err
 	}
 
-	if err := binary.Read(w, binary.LittleEndian, &block.nonce); err != nil {
+	if err := binary.Read(w, binary.LittleEndian, &block.TargetDifficulty); err != nil {
 		return &block, err
 	}
 
-	log.Printf("Magic ID: %x\n", block.MagicID())
+	if err := binary.Read(w, binary.LittleEndian, &block.Nonce); err != nil {
+		return &block, err
+	}
+
+	log.Printf("Magic ID: %x\n", block.MagicIDVal())
 	log.Printf("Hash: %v\n", block.HashString())
-	log.Printf("Block Length: %v\n", block.BlockLength())
-	log.Printf("Version Number: %v\n", block.VersionNumber())
+	log.Printf("Block Length: %v\n", block.BlockLengthVal())
+	log.Printf("Version Number: %v\n", block.VersionNumberVal())
 	log.Printf("Previous Hash: %v\n", block.PreviousHashString())
 	log.Printf("Merkle Root: %v\n", block.MerkleRootString())
 	log.Printf("TimeStamp: %v\n", block.TimeStampFormatted())
-	log.Printf("Target Difficulty: %v\n", block.TargetDifficulty())
-	log.Printf("Nonce: %v\n", block.Nonce())
+	log.Printf("Target Difficulty: %v\n", block.TargetDifficultyVal())
+	log.Printf("Nonce: %v\n", block.NonceVal())
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Transaction Count Read Error: %v\n", err)
 	} else {
 		var c int
-		block.transactioncount = append(block.transactioncount, b)
+		block.TransactionCount = append(block.TransactionCount, b)
 		if uint8(b) == 253 {
 			c = 2
 		} else if uint8(b) == 254 {
@@ -606,13 +596,13 @@ func (w *BlockParser) Decode() (*Block, error) {
 			if err := binary.Read(w, binary.LittleEndian, &d); err != nil {
 				log.Printf("Transaction Count Error: %v\n", err)
 			} else {
-				block.transactioncount = append(block.transactioncount, d...)
+				block.TransactionCount = append(block.TransactionCount, d...)
 			}
 		}
 	}
-	log.Printf("TransactionCount: %v\n", block.TransactionCount())
+	log.Printf("TransactionCount: %v\n", block.TransactionCountVal())
 
-	for i := 0; i < block.TransactionCount(); i++ {
+	for i := 0; i < block.TransactionCountVal(); i++ {
 		if t, err := w.DecodeTrans(); err == nil {
 			block.Transactions = append(block.Transactions, t)
 		} else if err != io.EOF {
