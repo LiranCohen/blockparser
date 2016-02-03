@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sync"
 	"time"
+
+	"github.com/jinzhu/gorm"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 //Helper Function To Convert VariableInt to Int
@@ -46,17 +50,214 @@ func VarInt(input []byte) int {
 
 }
 
+func New(r io.Reader) *Stream {
+	s := Stream{}
+	var err error
+	s.db, err = gorm.Open("sqlite3", "./blockchain.db")
+	if err != nil {
+		panic(err)
+	}
+	s.stream = bufio.NewReader(r)
+	s.db.LogMode(true)
+	s.db.CreateTable(&Block{})
+	s.db.CreateTable(&Transaction{})
+	s.db.CreateTable(&TransInput{})
+	s.db.CreateTable(&TransOutput{})
+	return &s
+}
+
+type Stream struct {
+	wg     sync.WaitGroup
+	db     gorm.DB
+	stream *bufio.Reader
+}
+
+func (s *Stream) ParseBlock(n int, b []byte) {
+	defer s.wg.Done()
+	defer fmt.Println(fmt.Sprintf("###############  End  Block #%v  ###############\n", (n - 1)))
+	buf := bytes.NewReader(b)
+	parser := NewBlockParser(buf)
+	_, err := parser.Decode()
+	if err != nil {
+		log.Printf("Error: %v\n", err)
+		return
+	}
+}
+
+func (s *Stream) ParseLEUint32(b []byte) uint32 {
+	var r uint32
+	buf := bytes.NewReader(b)
+	binary.Read(buf, binary.LittleEndian, &r)
+	return r
+}
+
+func (s *Stream) ParseBlockN(n int) error {
+	defer s.wg.Wait()
+
+	//Open BlockChain File and load it into a buffer
+	reader := s.stream
+	blocks := 0
+	parsed := 0
+	for {
+		//log.Printf("Block #%v\n", blocks)
+		if parsed == 1 {
+			break
+		}
+		//Temporary holder for what might be the MagicID
+		var m []byte
+		if b, err := reader.ReadByte(); err != nil {
+			log.Printf("Reader Error On Block: %v\n", blocks)
+			log.Printf("Error: %v\n", err)
+			break
+		} else {
+			//Check to make sure the first byte in the magic ID chunk is 0xF9
+			//Remember it's encoded in Little Endian so the first byte will end up being the last when encoded
+			if uint8(b) == 249 {
+				m = append(m, b)
+				for i := 0; i < 3; i++ {
+					if b, err := reader.ReadByte(); err != nil {
+						log.Printf("Reader Error inside MagicID On Block: %v\n", blocks)
+						log.Printf("Error: %v\n", err)
+						break
+					} else {
+						m = append(m, b)
+					}
+				}
+			} else {
+				log.Printf("Invalid Byte: %v\n", b)
+				continue
+			}
+		}
+		//Check If the MagicID == 0xD9B4BEF9
+		//If so, this is the beginning of a BitCoin BlockChain Block
+		if s.ParseLEUint32(m) == 3652501241 {
+			var stmp []byte
+			for i := 0; i < 4; i++ {
+				b, err := reader.ReadByte()
+				if err != nil {
+					break
+				}
+				stmp = append(stmp, b)
+			}
+			//Temporary place for block in memory
+			var block []byte
+			block = append(block, m...)
+			block = append(block, stmp...)
+			//Parse Size of Block and retrieve it
+			size := s.ParseLEUint32(stmp)
+			for i := 0; i < (int(size)); i++ {
+				b, err := reader.ReadByte()
+				if err != nil {
+					break
+				}
+				block = append(block, b)
+			}
+			blocks++
+			if blocks-1 < n {
+				continue
+			}
+			//Send the retrieved block to the parser
+			s.wg.Add(1)
+			go s.ParseBlock(blocks, block)
+			parsed++
+		} else {
+			log.Printf("Invalid MagicID Looking for next block")
+		}
+	}
+
+	return nil
+
+}
+
+//Does not currently parse all
+func (s *Stream) ParseAll() error {
+	defer s.wg.Wait()
+
+	//Open BlockChain File and load it into a buffer
+	reader := s.stream
+	blocks := 0
+	parsed := 0
+	for {
+		//log.Printf("Block #%v\n", blocks)
+		if parsed > 1 {
+			break
+		}
+		//Temporary holder for what might be the MagicID
+		var m []byte
+		if b, err := reader.ReadByte(); err != nil {
+			log.Printf("Reader Error On Block: %v\n", blocks)
+			log.Printf("Error: %v\n", err)
+			break
+		} else {
+			//Check to make sure the first byte in the magic ID chunk is 0xF9
+			//Remember it's encoded in Little Endian so the first byte will end up being the last when encoded
+			if uint8(b) == 249 {
+				m = append(m, b)
+				for i := 0; i < 3; i++ {
+					if b, err := reader.ReadByte(); err != nil {
+						log.Printf("Reader Error inside MagicID On Block: %v\n", blocks)
+						log.Printf("Error: %v\n", err)
+						break
+					} else {
+						m = append(m, b)
+					}
+				}
+			} else {
+				log.Printf("Invalid Byte: %v\n", b)
+				continue
+			}
+		}
+		//Check If the MagicID == 0xD9B4BEF9
+		//If so, this is the beginning of a BitCoin BlockChain Block
+		if s.ParseLEUint32(m) == 3652501241 {
+			var stmp []byte
+			for i := 0; i < 4; i++ {
+				b, err := reader.ReadByte()
+				if err != nil {
+					break
+				}
+				stmp = append(stmp, b)
+			}
+			//Temporary place for block in memory
+			var block []byte
+			block = append(block, m...)
+			block = append(block, stmp...)
+			//Parse Size of Block and retrieve it
+			size := s.ParseLEUint32(stmp)
+			for i := 0; i < (int(size)); i++ {
+				b, err := reader.ReadByte()
+				if err != nil {
+					break
+				}
+				block = append(block, b)
+			}
+			blocks++
+			if blocks < 100000 {
+				continue
+			}
+			//Send the retrieved block to the parser
+			s.wg.Add(1)
+			go s.ParseBlock(blocks, block)
+			parsed++
+		} else {
+			log.Printf("Invalid MagicID Looking for next block")
+		}
+	}
+
+	return nil
+}
+
 //BlockData Structure
 type Block struct {
-	magicid          [4]byte
-	blocklength      [4]uint8
-	versionnumber    [4]uint8
-	previoushash     [32]uint8
-	merkleroot       [32]uint8
-	timestamp        [4]uint8
-	targetdifficulty [4]uint8
-	nonce            [4]uint8
-	transactioncount []uint8
+	MagicId          [4]byte
+	BlockLength      [4]uint8
+	VersionNumber    [4]uint8
+	PreviousHash     [32]uint8
+	MerkleRoot       [32]uint8
+	TimeStamp        [4]uint8
+	TargetDifficulty [4]uint8
+	Nonce            [4]uint8
+	TransactionCount []uint8
 	Transactions     []Transaction
 }
 
@@ -64,12 +265,12 @@ func (b *Block) Hash() []byte {
 	var d []uint8
 	//d = append(d, b.magicid[:]...)
 	//d = append(d, b.blocklength[:]...)
-	d = append(d, b.versionnumber[:]...)
-	d = append(d, b.previoushash[:]...)
-	d = append(d, b.merkleroot[:]...)
-	d = append(d, b.timestamp[:]...)
-	d = append(d, b.targetdifficulty[:]...)
-	d = append(d, b.nonce[:]...)
+	d = append(d, b.VersionNumber[:]...)
+	d = append(d, b.PreviousHash[:]...)
+	d = append(d, b.MerkleRoot[:]...)
+	d = append(d, b.TimeStamp[:]...)
+	d = append(d, b.TargetDifficulty[:]...)
+	d = append(d, b.Nonce[:]...)
 	h := sha256.New()
 	h.Reset()
 	if _, err := h.Write(d); err != nil {
@@ -93,7 +294,7 @@ func (b *Block) HashString() string {
 }
 func (b *Block) MagicID() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.magicid[:])
+	reader := bytes.NewReader(b.MagicId[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("MagicID Error: %v", err)
 	}
@@ -101,7 +302,7 @@ func (b *Block) MagicID() uint32 {
 }
 func (b *Block) BlockLength() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.blocklength[:])
+	reader := bytes.NewReader(b.BlockLength[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("BlockLength Error: %v", err)
 	}
@@ -109,7 +310,7 @@ func (b *Block) BlockLength() uint32 {
 }
 func (b *Block) VersionNumber() uint32 {
 	var v uint32
-	reader := bytes.NewReader(b.versionnumber[:])
+	reader := bytes.NewReader(b.VersionNumber[:])
 	if err := binary.Read(reader, binary.LittleEndian, &v); err != nil {
 		log.Printf("VersionNumber Error: %v", err)
 	}
