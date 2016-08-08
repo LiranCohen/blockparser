@@ -58,23 +58,23 @@ func New(r io.Reader) *Stream {
 		panic(err)
 	}
 	s.stream = bufio.NewReader(r)
-	s.db.LogMode(true)
-	s.db.CreateTable(&Block{})
-	s.db.CreateTable(&Transaction{})
-	s.db.CreateTable(&TransInput{})
-	s.db.CreateTable(&TransOutput{})
+	//s.db.LogMode(true)
+	//s.db.CreateTable(&Block{})
+	//s.db.CreateTable(&Transaction{})
+	//s.db.CreateTable(&TransInput{})
+	//s.db.CreateTable(&TransOutput{})
 	return &s
 }
 
 type Stream struct {
 	wg     sync.WaitGroup
-	db     gorm.DB
+	db     *gorm.DB
 	stream *bufio.Reader
 }
 
 func (s *Stream) ParseBlock(n int, b []byte) {
 	defer s.wg.Done()
-	defer fmt.Println(fmt.Sprintf("###############  End  Block #%v  ###############\n", (n - 1)))
+	//defer fmt.Println(fmt.Sprintf("###############  End  Block #%v  ###############\n", (n - 1)))
 	buf := bytes.NewReader(b)
 	parser := NewBlockParser(buf)
 	_, err := parser.Decode()
@@ -179,9 +179,9 @@ func (s *Stream) ParseAll() error {
 	parsed := 0
 	for {
 		//log.Printf("Block #%v\n", blocks)
-		if parsed > 1 {
-			break
-		}
+		/*if parsed > 1 {*/
+		//break
+		/*}*/
 		//Temporary holder for what might be the MagicID
 		var m []byte
 		if b, err := reader.ReadByte(); err != nil {
@@ -569,16 +569,6 @@ func (w *BlockParser) Decode() (*Block, error) {
 		return &block, err
 	}
 
-	log.Printf("Magic ID: %x\n", block.MagicIDVal())
-	log.Printf("Hash: %v\n", block.HashString())
-	log.Printf("Block Length: %v\n", block.BlockLengthVal())
-	log.Printf("Version Number: %v\n", block.VersionNumberVal())
-	log.Printf("Previous Hash: %v\n", block.PreviousHashString())
-	log.Printf("Merkle Root: %v\n", block.MerkleRootString())
-	log.Printf("TimeStamp: %v\n", block.TimeStampFormatted())
-	log.Printf("Target Difficulty: %v\n", block.TargetDifficultyVal())
-	log.Printf("Nonce: %v\n", block.NonceVal())
-
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Transaction Count Read Error: %v\n", err)
 	} else {
@@ -600,7 +590,6 @@ func (w *BlockParser) Decode() (*Block, error) {
 			}
 		}
 	}
-	log.Printf("TransactionCount: %v\n", block.TransactionCountVal())
 
 	for i := 0; i < block.TransactionCountVal(); i++ {
 		if t, err := w.DecodeTrans(); err == nil {
@@ -609,19 +598,64 @@ func (w *BlockParser) Decode() (*Block, error) {
 			log.Printf("Transaction Parse Error: %v\n", err)
 		}
 	}
-
+	go w.PrintBlockInfo(block)
 	return &block, nil
+}
+
+func (w *BlockParser) PrintBlockInfo(block Block) {
+	blockOutputLog := []string{}
+
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Magic ID: %x\n", block.MagicIDVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Hash: %v\n", block.HashString()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Block Length: %v\n", block.BlockLengthVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Version Number: %v\n", block.VersionNumberVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Previous Hash: %v\n", block.PreviousHashString()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Merkle Root: %v\n", block.MerkleRootString()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("TimeStamp: %v\n", block.TimeStampFormatted()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Target Difficulty: %v\n", block.TargetDifficultyVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Nonce: %v\n", block.NonceVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("TransactionCount: %v\n", block.TransactionCountVal()))
+	for i, t := range block.Transactions {
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("Transaction %v:\n", i),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tTransaction Version Number: %v\n", t.VersionNumber()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tInput Count: %v\n", t.InputCount()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tOutput Count: %v\n", t.OutputCount()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tTrsansaction Lock Time: %v\n", t.LockTimeFormatted()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tTransaction Hash: %v\n", t.HashString()),
+		)
+	}
+	blockOutputLog = append(
+		blockOutputLog,
+		fmt.Sprint("####################"),
+	)
+
+	//fmt.Printf("%s\n\n", blockOutputLog)
 }
 
 func (w *BlockParser) DecodeTrans() (Transaction, error) {
 	trans := Transaction{}
-	log.Println("Decoding Transaction")
 
 	if err := binary.Read(w, binary.LittleEndian, &trans.versionnumber); err != nil {
 		log.Printf("Transaction Version Error: %v\n", err)
 		return trans, err
 	}
-	log.Printf("\tTransaction Version Number: %v\n", trans.VersionNumber())
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Input Transaction Count Read Error: %v\n", err)
@@ -645,7 +679,7 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 			}
 		}
 	}
-	log.Printf("\tInputCount: %v\n", trans.InputCount())
+
 	for i := 0; i < trans.InputCount(); i++ {
 		if input, err := w.DecodeInput(); err == nil {
 			trans.Inputs = append(trans.Inputs, input)
@@ -676,7 +710,6 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 			}
 		}
 	}
-	log.Printf("\tOutput Count: %v\n", trans.OutputCount())
 
 	for i := 0; i < trans.OutputCount(); i++ {
 		if output, err := w.DecodeOutput(); err == nil {
@@ -689,8 +722,6 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 	if err := binary.Read(w, binary.LittleEndian, &trans.locktime); err != nil {
 		log.Printf("Transaction Lock Time Error: %v\n", err)
 	}
-	log.Printf("\tTrsansaction Lock Time: %v\n", trans.LockTimeFormatted())
-	log.Printf("\tTransaction Hash: %v\n", trans.HashString())
 	return trans, nil
 }
 
@@ -700,12 +731,12 @@ func (w *BlockParser) DecodeInput() (TransInput, error) {
 		log.Printf("Input Hash Error: %v\n", err)
 		return input, err
 	}
-	log.Printf("\tInput Hash: %v\n", input.HashString())
+	//log.Printf("\tInput Hash: %v\n", input.HashString())
 	if err := binary.Read(w, binary.LittleEndian, &input.index); err != nil {
 		log.Printf("Input Index Error: %v\n", err)
 		return input, err
 	}
-	log.Printf("\tInput Index: %v\n", input.Index())
+	//log.Printf("\tInput Index: %v\n", input.Index())
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Script Length Read Error: %v\n", err)
@@ -728,21 +759,21 @@ func (w *BlockParser) DecodeInput() (TransInput, error) {
 				input.scriptlength = append(input.scriptlength, d...)
 			}
 		}
-		log.Printf("\tScript Length: %v\n", input.ScriptLength())
+		//log.Printf("\tScript Length: %v\n", input.ScriptLength())
 
 		for i := 0; i < input.ScriptLength(); i++ {
 			if b, err := w.ReadByte(); err == nil {
 				input.script = append(input.script, b)
 			}
 		}
-		log.Printf("\tScript: %v\n", input.Script())
+		//log.Printf("\tScript: %v\n", input.Script())
 	}
 
 	if err := binary.Read(w, binary.LittleEndian, &input.sequencenumber); err != nil {
 		log.Printf("Input Index Error: %v\n", err)
 		return input, err
 	}
-	log.Printf("\tSequence Number: %v\n", input.SequenceNumber())
+	//log.Printf("\tSequence Number: %v\n", input.SequenceNumber())
 
 	return input, nil
 }
@@ -753,7 +784,7 @@ func (w *BlockParser) DecodeOutput() (TransOutput, error) {
 		log.Printf("Output Value Error: %v\n", err)
 		return out, err
 	}
-	log.Printf("\tOutput Value: %v\n", out.value)
+	//log.Printf("\tOutput Value: %v\n", out.value)
 
 	if b, err := w.ReadByte(); err != nil {
 		log.Printf("Script Length Read Error: %v\n", err)
@@ -777,14 +808,14 @@ func (w *BlockParser) DecodeOutput() (TransOutput, error) {
 			}
 		}
 	}
-	log.Printf("\tScript Length: %v\n", VarInt(out.scriptlength))
+	//log.Printf("\tScript Length: %v\n", VarInt(out.scriptlength))
 
 	for i := 0; i < VarInt(out.scriptlength); i++ {
 		if b, err := w.ReadByte(); err == nil {
 			out.script = append(out.script, b)
 		}
 	}
-	log.Printf("\tScript: %v\n", out.script)
+	//log.Printf("\tScript: %v\n", out.script)
 
 	return out, nil
 }

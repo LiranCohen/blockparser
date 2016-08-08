@@ -15,7 +15,7 @@ func main() {
 		panic(err)
 	}
 	s := parser.New(f)
-	if err := s.ParseBlockN(0); err != nil {
+	if err := s.ParseAll(); err != nil {
 		panic(err)
 	}
 }
