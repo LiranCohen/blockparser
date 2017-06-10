@@ -25,7 +25,7 @@ func VarInt(input []byte) int {
 		r := bytes.NewReader(input[:2])
 		var i uint16
 		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
+			log.Printf("VariableInt Count Error 3: %v\n", err)
 			break
 		}
 		v = int(i)
@@ -33,7 +33,7 @@ func VarInt(input []byte) int {
 		r := bytes.NewReader(input[:4])
 		var i uint32
 		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
+			log.Printf("VariableInt Count Error 5: %v\n", err)
 			break
 		}
 		v = int(i)
@@ -41,13 +41,13 @@ func VarInt(input []byte) int {
 		r := bytes.NewReader(input[:8])
 		var i uint64
 		if err := binary.Read(r, binary.BigEndian, &i); err != nil {
-			log.Printf("Transaction Count Error: %v\n", err)
+			log.Printf("VariableInt Count Error 9: %v\n", err)
 			break
 		}
 		v = int(i)
 	}
-	return v
 
+	return v
 }
 
 func New(r io.Reader) *Stream {
@@ -92,7 +92,6 @@ func (s *Stream) ParseLEUint32(b []byte) uint32 {
 }
 
 func (s *Stream) ParseBlockN(n int) error {
-	defer s.wg.Wait()
 
 	//Open BlockChain File and load it into a buffer
 	reader := s.stream
@@ -164,14 +163,13 @@ func (s *Stream) ParseBlockN(n int) error {
 			log.Printf("Invalid MagicID Looking for next block")
 		}
 	}
+	s.wg.Wait()
 
-	return nil
-
+	return io.EOF
 }
 
 //Does not currently parse all
 func (s *Stream) ParseAll() error {
-	defer s.wg.Wait()
 
 	//Open BlockChain File and load it into a buffer
 	reader := s.stream
@@ -237,6 +235,7 @@ func (s *Stream) ParseAll() error {
 			}
 			//Send the retrieved block to the parser
 			s.wg.Add(1)
+			log.Println("FOUND")
 			go s.ParseBlock(blocks, block)
 			parsed++
 		} else {
@@ -283,6 +282,7 @@ func (b *Block) Hash() []byte {
 	}
 	return h.Sum(nil)
 }
+
 func (b *Block) HashString() string {
 	var temp []byte
 	hash := b.Hash()
@@ -290,8 +290,10 @@ func (b *Block) HashString() string {
 	for i := 0; i < len(hash); i++ {
 		temp = append([]byte{hash[i]}, temp...)
 	}
+	log.Printf("%s\n", temp[:])
 	return fmt.Sprintf("%x", temp[:])
 }
+
 func (b *Block) MagicIDVal() uint32 {
 	var v uint32
 	reader := bytes.NewReader(b.MagicID[:])
@@ -300,6 +302,7 @@ func (b *Block) MagicIDVal() uint32 {
 	}
 	return v
 }
+
 func (b *Block) BlockLengthVal() uint32 {
 	var v uint32
 	reader := bytes.NewReader(b.BlockLength[:])
@@ -308,6 +311,7 @@ func (b *Block) BlockLengthVal() uint32 {
 	}
 	return v
 }
+
 func (b *Block) VersionNumberVal() uint32 {
 	var v uint32
 	reader := bytes.NewReader(b.VersionNumber[:])
@@ -359,7 +363,6 @@ func (b *Block) TargetDifficultyVal() uint32 {
 		log.Printf("TargetDifficulty Error: %v", err)
 	}
 	return v
-
 }
 
 func (b *Block) NonceVal() uint32 {
@@ -528,6 +531,7 @@ func (to *TransOutput) Script() []uint8 {
 
 type BlockParser struct {
 	*bufio.Reader
+	wg sync.WaitGroup
 }
 
 func NewBlockParser(r io.Reader) *BlockParser {
@@ -584,6 +588,10 @@ func (w *BlockParser) Decode() (*Block, error) {
 		if c > 1 {
 			d := make([]uint8, c)
 			if err := binary.Read(w, binary.LittleEndian, &d); err != nil {
+				if err == io.EOF {
+					block.TransactionCount = make([]uint8, 0)
+					return &block, nil
+				}
 				log.Printf("Transaction Count Error: %v\n", err)
 			} else {
 				block.TransactionCount = append(block.TransactionCount, d...)
@@ -596,15 +604,23 @@ func (w *BlockParser) Decode() (*Block, error) {
 			block.Transactions = append(block.Transactions, t)
 		} else if err != io.EOF {
 			log.Printf("Transaction Parse Error: %v\n", err)
+		} else if err == io.EOF {
+			log.Printf("Transaction EOF: %v\n", err)
 		}
 	}
+	w.wg.Add(1)
 	go w.PrintBlockInfo(block)
 	return &block, nil
 }
 
 func (w *BlockParser) PrintBlockInfo(block Block) {
+	defer w.wg.Done()
 	blockOutputLog := []string{}
 
+	blockOutputLog = append(
+		blockOutputLog,
+		fmt.Sprintln("####################START BLOCK####################"),
+	)
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Magic ID: %x\n", block.MagicIDVal()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Hash: %v\n", block.HashString()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Block Length: %v\n", block.BlockLengthVal()))
@@ -643,10 +659,9 @@ func (w *BlockParser) PrintBlockInfo(block Block) {
 	}
 	blockOutputLog = append(
 		blockOutputLog,
-		fmt.Sprint("####################"),
+		fmt.Sprintln("######################END BLOCK####################"),
 	)
-
-	//fmt.Printf("%s\n\n", blockOutputLog)
+	log.Println(blockOutputLog)
 }
 
 func (w *BlockParser) DecodeTrans() (Transaction, error) {
