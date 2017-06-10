@@ -49,7 +49,6 @@ func (s *Stream) Parse(offset, length int) error {
 		if length > 0 && parsed == length {
 			break
 		}
-		log.Printf("Block #%v\n", blocks)
 		//Temporary holder for what might be the MagicID
 		var m []byte
 		if b, err := reader.ReadByte(); err != nil {

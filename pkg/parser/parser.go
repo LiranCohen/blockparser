@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"sync"
+	"strings"
 )
 
 
@@ -102,8 +103,9 @@ func (w *BlockParser) PrintBlockInfo(block Block) {
 
 	blockOutputLog = append(
 		blockOutputLog,
-		fmt.Sprintln("####################START BLOCK####################"),
+		fmt.Sprintf("\n####################START BLOCK####################\n"),
 	)
+
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Magic ID: %x\n", block.MagicIDVal()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Hash: %v\n", block.HashString()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Block Length: %v\n", block.BlockLengthVal()))
@@ -111,9 +113,10 @@ func (w *BlockParser) PrintBlockInfo(block Block) {
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Previous Hash: %v\n", block.PreviousHashString()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Merkle Root: %v\n", block.MerkleRootString()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("TimeStamp: %v\n", block.TimeStampFormatted()))
-	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Target Difficulty: %v\n", block.TargetDifficultyVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Target Difficulty: %x\n", block.TargetDifficultyVal()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Nonce: %v\n", block.NonceVal()))
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("TransactionCount: %v\n", block.TransactionCountVal()))
+
 	for i, t := range block.Transactions {
 		blockOutputLog = append(
 			blockOutputLog,
@@ -140,11 +143,13 @@ func (w *BlockParser) PrintBlockInfo(block Block) {
 			fmt.Sprintf("\tTransaction Hash: %v\n", t.HashString()),
 		)
 	}
+
 	blockOutputLog = append(
 		blockOutputLog,
-		fmt.Sprintln("######################END BLOCK####################"),
+		fmt.Sprintf("\n######################END BLOCK####################\n"),
 	)
-	log.Println(blockOutputLog)
+
+	log.Printf(strings.Join(blockOutputLog, ""))
 }
 
 func (w *BlockParser) DecodeTrans() (Transaction, error) {

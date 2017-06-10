@@ -49,11 +49,10 @@ func (b *Block) Hash() []byte {
 func (b *Block) HashString() string {
 	var temp []byte
 	hash := b.Hash()
-	//Not sure how else to converte little endian to string.
+	//Not sure how else to convert little endian to string.
 	for i := 0; i < len(hash); i++ {
 		temp = append([]byte{hash[i]}, temp...)
 	}
-	log.Printf("%s\n", temp[:])
 	return fmt.Sprintf("%x", temp[:])
 }
 
