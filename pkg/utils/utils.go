@@ -1,4 +1,4 @@
-package parser
+package utils
 
 import (
 	"bytes"
@@ -41,3 +41,9 @@ func VarInt(input []byte) int {
 	return v
 }
 
+func ParseLEUint32(b []byte) uint32 {
+	var r uint32
+	buf := bytes.NewReader(b)
+	binary.Read(buf, binary.LittleEndian, &r)
+	return r
+}

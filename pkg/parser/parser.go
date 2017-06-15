@@ -8,6 +8,7 @@ import (
 	"log"
 	"sync"
 	"strings"
+	"github.com/lirancohen/blockparser/pkg/utils"
 )
 
 
@@ -23,8 +24,8 @@ func NewBlockParser(r io.Reader, wg *sync.WaitGroup) *BlockParser {
 	}
 }
 
-func (w *BlockParser) Decode() (*Block, error) {
-	block := Block{}
+func (w *BlockParser) Decode(height int) (*Block, error) {
+	block := Block{Height:height}
 
 	if err := binary.Read(w, binary.LittleEndian, &block.MagicID); err != nil {
 		return &block, err
@@ -92,8 +93,6 @@ func (w *BlockParser) Decode() (*Block, error) {
 			return &block, err;
 		}
 	}
-	w.wg.Add(1)
-	go w.PrintBlockInfo(block)
 	return &block, nil
 }
 
@@ -103,7 +102,7 @@ func (w *BlockParser) PrintBlockInfo(block Block) {
 
 	blockOutputLog = append(
 		blockOutputLog,
-		fmt.Sprintf("\n####################START BLOCK####################\n"),
+		fmt.Sprintf("\n#################### START BLOCK %v ####################\n", block.Height),
 	)
 
 	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Magic ID: %x\n", block.MagicIDVal()))
@@ -146,7 +145,7 @@ func (w *BlockParser) PrintBlockInfo(block Block) {
 
 	blockOutputLog = append(
 		blockOutputLog,
-		fmt.Sprintf("\n######################END BLOCK####################\n"),
+		fmt.Sprintf("\n#################### END BLOCK %v ####################\n", block.Height),
 	)
 
 	log.Printf(strings.Join(blockOutputLog, ""))
@@ -317,7 +316,7 @@ func (w *BlockParser) DecodeOutput() (TransOutput, error) {
 	}
 	//log.Printf("\tScript Length: %v\n", VarInt(out.scriptlength))
 
-	for i := 0; i < VarInt(out.scriptlength); i++ {
+	for i := 0; i < utils.VarInt(out.scriptlength); i++ {
 		if b, err := w.ReadByte(); err == nil {
 			out.script = append(out.script, b)
 		}

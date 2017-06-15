@@ -7,6 +7,7 @@ import (
 	"log"
 	"crypto/sha256"
 	"time"
+	"github.com/lirancohen/blockparser/pkg/utils"
 )
 
 type Transaction struct {
@@ -61,11 +62,11 @@ func (t *Transaction) VersionNumber() uint32 {
 }
 
 func (t *Transaction) InputCount() int {
-	return VarInt(t.inputcount)
+	return utils.VarInt(t.inputcount)
 }
 
 func (t *Transaction) OutputCount() int {
-	return VarInt(t.outputcount)
+	return utils.VarInt(t.outputcount)
 }
 
 func (t *Transaction) LockTime() uint32 {
@@ -126,7 +127,7 @@ func (ti *TransInput) Index() uint32 {
 }
 
 func (ti *TransInput) ScriptLength() int {
-	return VarInt(ti.scriptlength)
+	return utils.VarInt(ti.scriptlength)
 }
 
 func (ti *TransInput) Script() []uint8 {
@@ -153,7 +154,7 @@ func (to *TransOutput) Value() uint64 {
 }
 
 func (to *TransOutput) ScriptLength() int {
-	return VarInt(to.scriptlength)
+	return utils.VarInt(to.scriptlength)
 }
 
 func (to *TransOutput) Script() []uint8 {

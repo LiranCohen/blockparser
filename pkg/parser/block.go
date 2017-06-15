@@ -7,10 +7,13 @@ import (
 	"log"
 	"time"
 	"crypto/sha256"
+	"github.com/lirancohen/blockparser/pkg/utils"
+	"strings"
 )
 
 //BlockData Structure
 type Block struct {
+	Height		 int
 	MagicID          [4]byte
 	BlockLength      [4]uint8
 	VersionNumber    [4]uint8
@@ -137,5 +140,58 @@ func (b *Block) NonceVal() uint32 {
 }
 
 func (b *Block) TransactionCountVal() int {
-	return VarInt(b.TransactionCount)
+	return utils.VarInt(b.TransactionCount)
+}
+func (b *Block) PrintBlockInfo() string {
+	blockOutputLog := []string{}
+
+	blockOutputLog = append(
+		blockOutputLog,
+		fmt.Sprintf("\n#################### START BLOCK %v ####################\n", b.Height),
+	)
+
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Magic ID: %x\n", b.MagicIDVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Hash: %v\n", b.HashString()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Block Length: %v\n", b.BlockLengthVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Version Number: %v\n", b.VersionNumberVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Previous Hash: %v\n", b.PreviousHashString()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Merkle Root: %v\n", b.MerkleRootString()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("TimeStamp: %v\n", b.TimeStampFormatted()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Target Difficulty: %x\n", b.TargetDifficultyVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("Nonce: %v\n", b.NonceVal()))
+	blockOutputLog = append(blockOutputLog, fmt.Sprintf("TransactionCount: %v\n", b.TransactionCountVal()))
+
+	for i, t := range b.Transactions {
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("Transaction %v:\n", i),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tTransaction Version Number: %v\n", t.VersionNumber()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tInput Count: %v\n", t.InputCount()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tOutput Count: %v\n", t.OutputCount()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tTrsansaction Lock Time: %v\n", t.LockTimeFormatted()),
+		)
+		blockOutputLog = append(
+			blockOutputLog,
+			fmt.Sprintf("\tTransaction Hash: %v\n", t.HashString()),
+		)
+	}
+
+	blockOutputLog = append(
+		blockOutputLog,
+		fmt.Sprintf("\n#################### END BLOCK %v ####################\n", b.Height),
+	)
+
+	return strings.Join(blockOutputLog, "")
 }
