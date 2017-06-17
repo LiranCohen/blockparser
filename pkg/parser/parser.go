@@ -226,7 +226,7 @@ func (w *BlockParser) DecodeTrans() (Transaction, error) {
 	}
 
 	if err := binary.Read(w, binary.LittleEndian, &trans.locktime); err != nil {
-		log.Printf("Transaction Lock Time Error: %v\n", err)
+		//log.Printf("Transaction Lock Time Error: %v\n", err)
 	}
 	return trans, nil
 }

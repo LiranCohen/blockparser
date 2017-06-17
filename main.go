@@ -1,8 +1,6 @@
 package main
 
 import (
-	//"io"
-	"fmt"
 	"time"
 	"path/filepath"
 	"strconv"
@@ -11,6 +9,7 @@ import (
 
 	"github.com/lirancohen/blockparser/pkg/chunker"
 	"github.com/lirancohen/blockparser/pkg/parser"
+	"bufio"
 )
 
 const(
@@ -41,15 +40,38 @@ func main() {
 	log.Println("Starting...")
 
 	chunk := parser.EmptyStream()
-
-	seekBlock := time.Now()
-	b, err := chunk.SeekBlock(153398)
+	f, err := os.Open("./data/bootstrap.dat")
 	if err != nil {
 		panic(err)
 	}
-	log.Println("Found Block in: %v\n", time.Since(seekBlock).String())
+	chunk.Stream = bufio.NewReader(f)
 
-	fmt.Println(b.PrintBlockInfo())
+	seekBlock := time.Now()
+	//b, err := chunk.SeekBlock(153398)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//
+	//fmt.Println(b.PrintBlockInfo())
+	i := 0
+	for{
+		log.Println(i)
+		//chunk, err = chunk.Next()
+		//if err == nil {
+			t, err := chunk.SeekTransaction("e55782cc3b70c3fb2e11de1ac2d04249296735647f6d5ea047ceab894c717211")
+			if err != nil && err.Error() != parser.ErrNotFound.Error() {
+				panic(err)
+			} else if err.Error() == parser.ErrNotFound.Error() {
+				i++
+				continue
+			}
+			log.Println("Found Transaction: %v\n", t)
+			log.Println("Found Transaction in: %v\n", time.Since(seekBlock).String())
+		//} else {
+		//	log.Printf("Error: %v\n", err.Error())
+		//	break
+		//}
+	}
 
 
 	//var offset,length int
